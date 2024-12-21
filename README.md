@@ -7,8 +7,9 @@ A web application to download comics from ReadAllComics and convert them to PDF 
 - Web interface for easy comic downloading
 - Maintains original image quality and dimensions
 - Parallel image downloading for better performance
-- Automatic cleanup of temporary files
+- Automatic cleanup of temporary files and PDFs after download
 - Docker containerized for easy deployment
+- Optimized page loading (downloads only necessary content)
 
 ## Requirements
 
@@ -18,87 +19,90 @@ A web application to download comics from ReadAllComics and convert them to PDF 
 ## Quick Start
 
 1. Clone the repository:
-```
+```bash
 git clone <repository-url>
 cd readallcomics-pdf-download
 ```
 
-2. Create required directories:
-```bash
-mkdir -p pdfs images
-```
-
-3. Build and run with Docker Compose:
+2. Build and run with Docker Compose:
 ```bash
 docker-compose up --build
 ```
 
-4. Access the application:
+3. Access the application:
    - Open your browser and navigate to: http://localhost:5000
    - Paste a ReadAllComics URL (e.g., https://readallcomics.com/kingdom-come-2019-part-1/)
    - Click "Download PDF"
-   - Wait for the PDF to be generated and downloaded automatically
-
-## Running Without Docker
-
-If you prefer to run without Docker:
-
-1. Create a virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-3. Create required directories:
-```bash
-mkdir -p pdfs images
-```
-
-4. Run the application:
-```bash
-python app.py
-```
-
-5. Access the application at http://localhost:5000
+   - The PDF will be automatically downloaded and removed from the server
 
 ## Project Structure
 
 ```
 .
-├── app.py              # Flask web application
-├── main.py            # Core download and PDF generation logic
-├── requirements.txt   # Python dependencies
-├── Dockerfile         # Docker image configuration
-├── docker-compose.yml # Docker Compose configuration
-├── templates/         # HTML templates
-│   └── index.html    # Main page template
-├── pdfs/             # Generated PDFs storage (created at runtime)
-└── images/           # Temporary image storage (created at runtime)
+├── app/                # Application package
+│   ├── __init__.py    # App initialization
+│   ├── routes/        # Route handlers
+│   ├── services/      # Business logic
+│   ├── utils/         # Utilities
+│   ├── static/        # Static files
+│   └── templates/     # HTML templates
+├── config.py          # Configuration
+├── main.py           # Application entry point
+├── requirements.txt  # Python dependencies
+├── Dockerfile       # Docker image configuration
+└── docker-compose.yml # Docker Compose configuration
 ```
+
+## How It Works
+
+1. **Page Processing**:
+   - Downloads only the HTML content of the comic page
+   - Ignores unnecessary resources (CSS, JS, etc.)
+   - Extracts image URLs efficiently
+
+2. **Image Download**:
+   - Downloads images in parallel for better performance
+   - Uses streaming to optimize memory usage
+   - Automatically cleans up images after PDF creation
+
+3. **PDF Generation**:
+   - Creates PDF with original image dimensions
+   - Optimizes memory usage during creation
+   - Automatically deletes the PDF after download
+
+4. **File Management**:
+   - All temporary files are automatically cleaned up
+   - Images are deleted after being added to the PDF
+   - PDFs are deleted immediately after successful download
 
 ## Notes
 
-- PDFs are saved temporarily and automatically deleted after download
-- Images are automatically cleaned up after PDF generation
+- The application is optimized for memory usage and performance
+- All files (images and PDFs) are automatically cleaned up
 - The application runs on port 5000 by default
 - For production deployment, consider adding proper security measures
 
 ## Troubleshooting
 
-1. If the application can't create directories:
-   - Ensure you have write permissions in the project directory
-   - Manually create the `pdfs` and `images` directories
+1. If downloads are not starting:
+   - Check if the URL is from ReadAllComics
+   - Ensure the URL format is correct
+   - Check browser console for any errors
 
-2. If PDFs aren't downloading:
+2. If PDFs are not downloading:
    - Check your browser's download settings
-   - Look for the PDF in the `pdfs` directory
+   - Ensure you have enough disk space
+   - Check the application logs for errors
 
-3. If images aren't downloading:
-   - Verify your internet connection
-   - Check if the comic URL is accessible
-   - Ensure the URL follows the ReadAllComics format
+3. If the application is slow:
+   - Check your internet connection
+   - The site might be rate-limiting requests
+   - Try reducing the number of parallel downloads in config.py
+
+## Logging
+
+The application provides detailed logging:
+- General operations in the console
+- Detailed logs in `comic_downloader.log`
+- Download progress and error information
+- File cleanup confirmations
