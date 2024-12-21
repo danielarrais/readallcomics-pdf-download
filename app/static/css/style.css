@@ -151,4 +151,115 @@ button:disabled {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+.chapters-list {
+    display: flex;
+    flex-direction: column;
+    max-width: 1000px;
+    margin: 0 auto;
+    position: relative;
+}
+
+.chapter-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    margin: 5px 0;
+    background: #f5f5f5;
+    border-radius: 4px;
+}
+
+.chapter-title {
+    flex: 1;
+    margin-right: 20px;
+    min-width: 0;
+}
+
+.chapter-columns {
+    display: flex;
+    gap: 20px;
+    width: 300px;
+    margin-left: auto;
+}
+
+.download-column {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+}
+
+.download-all-columns {
+    display: flex;
+    gap: 20px;
+    width: 300px;
+    margin-left: auto;
+    margin-right: 10px;
+    padding-top: 15px;
+    border-top: 2px solid #e0e0e0;
+}
+
+.download-btn, .download-all-btn {
+    width: 100%;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: opacity 0.3s ease;
+}
+
+.download-btn:disabled, .download-all-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.download-original {
+    background: #4CAF50;
+    color: white;
+}
+
+.download-compressed {
+    background: #2196F3;
+    color: white;
+}
+
+/* Ajuste para o ícone do botão principal */
+#submitButton i {
+    margin-right: 8px;
+}
+
+.bulk-actions {
+    margin: 2rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.bulk-buttons {
+    display: none;
+}
+
+.back-btn {
+    padding: 0.8rem;
+    background-color: #95a5a6;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background-color 0.3s ease;
+}
+
+.back-btn:hover {
+    background-color: #7f8c8d;
 } 

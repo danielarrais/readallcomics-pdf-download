@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, NamedTuple
 from pathlib import Path
 import os
 import requests
@@ -18,6 +18,10 @@ class ImageInfo:
     index: int
     width: int
     height: int
+
+class PageInfo(NamedTuple):
+    title: str
+    image_urls: List[str]
 
 class ComicService:
     def __init__(self):
@@ -61,12 +65,14 @@ class ComicService:
         Processa uma URL de quadrinho e retorna o nome do PDF gerado
         """
         logger.info("Starting comic processing for URL: %s", url)
-        pdf_name = self._generate_pdf_name(url)
-        pdf_path = os.path.join(current_app.config['UPLOAD_FOLDER'], pdf_name)
-        logger.info("PDF will be saved as: %s", pdf_path)
-        
         try:
-            images_info = self._download_images(url)
+            # Obtém URLs das imagens e título em uma única requisição
+            page_info = self._get_page_info(url)
+            pdf_name = self._generate_pdf_name(page_info.title, url)
+            pdf_path = os.path.join(current_app.config['UPLOAD_FOLDER'], pdf_name)
+            logger.info("PDF will be saved as: %s", pdf_path)
+            
+            images_info = self._download_images(url, page_info.image_urls)
             if not images_info:
                 raise ValueError("No images were downloaded")
                 
@@ -80,14 +86,33 @@ class ComicService:
             self._cleanup_on_error(images_info if 'images_info' in locals() else None)
             raise
     
-    def _generate_pdf_name(self, url: str) -> str:
+    def _generate_pdf_name(self, title: str, url: str) -> str:
         """
-        Gera um nome seguro para o PDF baseado na URL
+        Gera um nome seguro para o PDF baseado no título do capítulo
         """
-        base_name = url.rstrip('/').split('/')[-1]
-        # Remove caracteres inválidos
-        safe_name = "".join(c for c in base_name if c.isalnum() or c in ('-', '_'))
-        return f"{safe_name}.pdf"
+        try:
+            if title:
+                chapter_name = title
+                logger.info("Using chapter title: %s", chapter_name)
+            else:
+                # Fallback: usa a URL
+                chapter_name = url.rstrip('/').split('/')[-1]
+                logger.warning("No title available, using URL part: %s", chapter_name)
+            
+            # Remove caracteres inválidos e limita o tamanho
+            safe_name = "".join(c for c in chapter_name if c.isalnum() or c in ('-', '_', ' '))
+            safe_name = safe_name.replace(' ', '-')[:100]  # Limita tamanho e substitui espaços
+            
+            pdf_name = f"{safe_name}.pdf"
+            logger.debug("Generated PDF name: %s", pdf_name)
+            return pdf_name
+            
+        except Exception as e:
+            logger.error("Error generating PDF name: %s", str(e))
+            # Fallback para o método antigo em caso de erro
+            base_name = url.rstrip('/').split('/')[-1]
+            safe_name = "".join(c for c in base_name if c.isalnum() or c in ('-', '_'))
+            return f"{safe_name}.pdf"
     
     def _cleanup_on_error(self, images_info: Optional[List[ImageInfo]] = None) -> None:
         """
@@ -102,7 +127,49 @@ class ComicService:
                 except Exception as e:
                     logger.error("Error cleaning up file %s: %s", img_info.path, str(e))
     
-    def _download_images(self, url: str) -> List[ImageInfo]:
+    def _get_page_info(self, url: str) -> PageInfo:
+        """
+        Extrai título e URLs das imagens da página em uma única requisição
+        """
+        logger.info("Fetching page info from: %s", url)
+        
+        try:
+            response = self.session.get(
+                url,
+                stream=True,
+                verify=False,
+                timeout=(5, 15)
+            )
+            response.raise_for_status()
+            logger.debug("Successfully fetched page content")
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Extrai o título
+            title = soup.select_one('strong')
+            page_title = title.text.strip() if title else None
+            logger.info("Found page title: %s", page_title)
+            
+            # Extrai URLs das imagens
+            target_div = soup.select_one(self.selector)
+            if not target_div:
+                raise ValueError(f"Target element not found using selector: {self.selector}")
+            
+            img_urls = [img['src'] for img in target_div.find_all("img") if 'src' in img.attrs]
+            if not img_urls:
+                raise ValueError("No images found in target element")
+            
+            logger.info("Successfully extracted %d image URLs", len(img_urls))
+            return PageInfo(title=page_title, image_urls=img_urls)
+            
+        except requests.RequestException as e:
+            logger.error("Network error fetching page: %s", str(e))
+            raise
+        except Exception as e:
+            logger.error("Error parsing page: %s", str(e))
+            raise
+    
+    def _download_images(self, url: str, img_urls: List[str]) -> List[ImageInfo]:
         """
         Faz download das imagens e retorna suas informações
         """
@@ -112,11 +179,7 @@ class ComicService:
         logger.debug("Using images directory: %s", images_dir)
         
         try:
-            # Obtém URLs das imagens
-            img_urls = self._get_image_urls(url)
-            logger.info("Found %d image URLs to download", len(img_urls))
-            
-            # Download paralelo
+            # Download paralelo (usando URLs já obtidas)
             img_paths = self._parallel_download(img_urls, images_dir)
             logger.info("Completed parallel download of %d images", len(img_paths))
             
@@ -128,43 +191,6 @@ class ComicService:
             
         except Exception as e:
             logger.error("Error in download process: %s", str(e))
-            raise
-    
-    def _get_image_urls(self, url: str) -> List[str]:
-        """
-        Extrai URLs das imagens da página
-        """
-        logger.info("Fetching image URLs from: %s", url)
-        
-        try:
-            response = self.session.get(
-                url,
-                stream=True,
-                verify=False,
-                timeout=(5, 15)  # (connect timeout, read timeout)
-            )
-            response.raise_for_status()
-            logger.debug("Successfully fetched page content")
-            
-            soup = BeautifulSoup(response.text, 'html.parser')
-            target_div = soup.select_one(self.selector)
-            
-            if not target_div:
-                raise ValueError(f"Target element not found using selector: {self.selector}")
-            
-            img_urls = [img['src'] for img in target_div.find_all("img") if 'src' in img.attrs]
-            
-            if not img_urls:
-                raise ValueError("No images found in target element")
-            
-            logger.info("Successfully extracted %d image URLs", len(img_urls))
-            return img_urls
-            
-        except requests.RequestException as e:
-            logger.error("Network error fetching page: %s", str(e))
-            raise
-        except Exception as e:
-            logger.error("Error parsing page: %s", str(e))
             raise
     
     def _parallel_download(self, urls: List[str], output_dir: Path) -> List[Tuple[str, int]]:

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Comic PDF Downloader</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
     <div class="container">
@@ -13,16 +14,18 @@
             <div class="form-group">
                 <label for="url">URL da HQ:</label>
                 <input type="url" id="url" required 
-                       placeholder="https://readallcomics.com/example-comic/">
+                       placeholder="https://readallcomics.com/category/name-of-comics/">
             </div>
-            <div class="form-group checkbox-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" id="compress" checked>
-                    Comprimir PDF
-                </label>
-            </div>
-            <button type="submit" id="submitButton">Baixar PDF</button>
+            <button type="submit" id="submitButton">
+                <i class="fas fa-search"></i> Listar Capítulos
+            </button>
         </form>
+        <div id="bulk-actions" class="bulk-actions" style="display: none;">
+            <button onclick="backToHome()" class="back-btn">
+                <i class="fas fa-arrow-left"></i> Voltar
+            </button>
+        </div>
+        <div id="chapters-list" class="chapters-list"></div>
         <div id="status" class="status"></div>
     </div>
 
@@ -30,7 +33,9 @@
         const form = document.getElementById('downloadForm');
         const submitButton = document.getElementById('submitButton');
         const statusDiv = document.getElementById('status');
+        const chaptersListDiv = document.getElementById('chapters-list');
         const originalButtonText = submitButton.textContent;
+        let isDownloading = false;
 
         function showStatus(message, type) {
             statusDiv.textContent = message;
@@ -41,15 +46,43 @@
             submitButton.disabled = isLoading;
             if (isLoading) {
                 submitButton.innerHTML = '<div class="loading"></div>Processando...';
-                showStatus('Baixando e processando as imagens...', 'processing');
+                showStatus('Extraindo capítulos...', 'processing');
             } else {
-                submitButton.textContent = originalButtonText;
+                submitButton.innerHTML = '<i class="fas fa-search"></i> Listar Capítulos';
             }
         }
 
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            setLoading(true);
+        function setDownloadButtonLoading(button, isLoading) {
+            const allButtons = document.querySelectorAll('.download-btn, .download-all-btn');
+            isDownloading = isLoading;
+            
+            allButtons.forEach(btn => {
+                if (isLoading) {
+                    btn.disabled = true;
+                    btn.style.opacity = '0.6';
+                    btn.style.cursor = 'not-allowed';
+                } else {
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.style.cursor = 'pointer';
+                }
+            });
+
+            if (isLoading) {
+                button.innerHTML = '<div class="loading"></div>';
+                showStatus('Baixando e processando as imagens...', 'processing');
+            } else {
+                const isOriginal = button.classList.contains('download-original');
+                button.innerHTML = isOriginal ? 
+                    '<i class="fas fa-file-pdf"></i> Original' : 
+                    '<i class="fas fa-compress-arrows-alt"></i> Comprimido';
+            }
+        }
+
+        async function downloadChapter(button, url, compress, title) {
+            if (isDownloading) return;
+            
+            setDownloadButtonLoading(button, true);
             
             try {
                 const response = await fetch('/download', {
@@ -58,8 +91,8 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        url: document.getElementById('url').value,
-                        compress: document.getElementById('compress').checked
+                        url: url.replace(/'/g, ''),
+                        compress: compress
                     })
                 });
                 
@@ -67,10 +100,9 @@
                 
                 if (response.ok) {
                     showStatus('PDF gerado com sucesso!', 'success');
-                    // Criar um link temporário para download
                     const link = document.createElement('a');
                     link.href = `/download/${result.filename}`;
-                    link.download = result.filename; // Força download ao invés de abrir
+                    link.download = result.filename;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
@@ -79,6 +111,161 @@
                 }
             } catch (error) {
                 showStatus('Não foi possível processar sua solicitação. Tente novamente mais tarde.', 'error');
+            } finally {
+                setDownloadButtonLoading(button, false);
+            }
+        }
+
+        function backToHome() {
+            form.style.display = 'block';
+            document.getElementById('bulk-actions').style.display = 'none';
+            chaptersListDiv.innerHTML = '';
+            document.getElementById('url').value = '';
+            showStatus('', '');
+        }
+
+        async function downloadAllChapters(compress) {
+            if (isDownloading) return;
+            
+            const button = event.target;
+            const chapters = Array.from(document.querySelectorAll('.chapter-item')).map(item => ({
+                url: item.querySelector('.download-btn').onclick.toString()
+                    .match(/downloadChapter\(this,\s*'([^']+)'/)[1],
+                title: item.querySelector('.chapter-title').textContent
+            }));
+
+            setDownloadButtonLoading(button, true);
+            isDownloading = true;
+            let downloadedCount = 0;
+
+            try {
+                for (const chapter of chapters) {
+                    try {
+                        showStatus(`Baixando ${chapter.title} (${downloadedCount + 1}/${chapters.length})...`, 'processing');
+                        
+                        const response = await fetch('/download', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                url: chapter.url,
+                                compress: compress
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (response.ok) {
+                            const link = document.createElement('a');
+                            link.href = `/download/${result.filename}`;
+                            link.download = result.filename;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            downloadedCount++;
+                        } else {
+                            throw new Error(`Erro ao processar ${chapter.title}`);
+                        }
+                    } catch (error) {
+                        showStatus(`Erro ao baixar ${chapter.title}. Continuando com os próximos...`, 'error');
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                    }
+                }
+            } finally {
+                setDownloadButtonLoading(button, false);
+                isDownloading = false;
+                showStatus(`Download concluído! ${downloadedCount}/${chapters.length} capítulos baixados.`, 'success');
+            }
+        }
+
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+            
+            const url = document.getElementById('url').value;
+            
+            // Valida o formato da URL
+            if (!url.startsWith('https://readallcomics.com/category/')) {
+                showStatus('URL inválida. Use o formato: https://readallcomics.com/category/nome-da-hq/', 'error');
+                return;
+            }
+            
+            setLoading(true);
+            chaptersListDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/extract-chapters', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    if (!result.chapters || result.chapters.length === 0) {
+                        showStatus('Nenhum capítulo encontrado nesta URL. Verifique se o link está correto.', 'error');
+                        return;
+                    }
+
+                    showStatus(`${result.chapters.length} capítulos encontrados!`, 'success');
+                    
+                    form.style.display = 'none';
+                    document.getElementById('bulk-actions').style.display = 'block';
+                    
+                    const sortedChapters = result.chapters.sort((a, b) => 
+                        a.title.localeCompare(b.title, undefined, {numeric: true, sensitivity: 'base'})
+                    );
+                    
+                    sortedChapters.forEach(chapter => {
+                        const chapterDiv = document.createElement('div');
+                        chapterDiv.className = 'chapter-item';
+                        
+                        chapterDiv.innerHTML = `
+                            <div class="chapter-title">${chapter.title}</div>
+                            <div class="chapter-columns">
+                                <div class="download-column">
+                                    <button onclick="downloadChapter(this, '${chapter.url}', false, '${chapter.title}')" 
+                                            class="download-btn download-original">
+                                            <i class="fas fa-file-pdf"></i> Original
+                                    </button>
+                                </div>
+                                <div class="download-column">
+                                    <button onclick="downloadChapter(this, '${chapter.url}', true, '${chapter.title}')" 
+                                            class="download-btn download-compressed">
+                                            <i class="fas fa-compress-arrows-alt"></i> Comprimido
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        
+                        chaptersListDiv.appendChild(chapterDiv);
+                    });
+
+                    // Adiciona os botões de download em massa após listar os capítulos
+                    const downloadAllButtons = document.createElement('div');
+                    downloadAllButtons.className = 'download-all-columns';
+                    downloadAllButtons.innerHTML = `
+                        <div class="download-column">
+                            <button onclick="downloadAllChapters(false)" class="download-all-btn download-original">
+                                <i class="fas fa-file-pdf"></i> Baixar Todos
+                            </button>
+                        </div>
+                        <div class="download-column">
+                            <button onclick="downloadAllChapters(true)" class="download-all-btn download-compressed">
+                                <i class="fas fa-compress-arrows-alt"></i> Baixar Todos
+                            </button>
+                        </div>
+                    `;
+                    chaptersListDiv.appendChild(downloadAllButtons);
+                } else {
+                    throw new Error(result.error || 'Erro ao extrair capítulos');
+                }
+            } catch (error) {
+                showStatus('Não foi possível extrair os capítulos. Tente novamente mais tarde.', 'error');
+                console.error('Error:', error);
             } finally {
                 setLoading(false);
             }

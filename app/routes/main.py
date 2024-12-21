@@ -4,6 +4,7 @@ from app.utils.logger import logger
 import os
 from pathlib import Path
 from functools import wraps
+from app.services.series_extractor import SeriesExtractor
 
 main = Blueprint('main', __name__)
 
@@ -94,4 +95,28 @@ def not_found_error(error):
 @main.errorhandler(500)
 def internal_error(error):
     logger.error("500 error occurred", exc_info=True)
-    return jsonify({'error': 'Erro interno do servidor'}), 500 
+    return jsonify({'error': 'Erro interno do servidor'}), 500
+
+@main.route('/extract-chapters', methods=['POST'])
+def extract_chapters():
+    logger.info("Received chapter extraction request")
+    try:
+        data = request.get_json()
+        url = data.get('url')
+        
+        if not url:
+            logger.warning("Invalid request: URL is empty")
+            return jsonify({'error': 'URL inválida'}), 400
+        
+        if not url.startswith('https://readallcomics.com/category/'):
+            logger.warning("Invalid request: URL is not a valid category URL - %s", url)
+            return jsonify({'error': 'URL inválida. Use uma URL de categoria do ReadAllComics.'}), 400
+        
+        extractor = SeriesExtractor(url)
+        chapters = extractor.extract_chapters()
+        
+        return jsonify({'chapters': chapters})
+        
+    except Exception as e:
+        logger.error("Error extracting chapters: %s", str(e), exc_info=True)
+        return jsonify({'error': 'Erro interno do servidor'}), 500 
