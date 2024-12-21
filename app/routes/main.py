@@ -35,7 +35,8 @@ def download():
     try:
         data = request.get_json()
         url = data.get('url')
-        logger.info("Processing URL: %s", url)
+        compress = data.get('compress', True)
+        logger.info("Processing URL: %s with compression: %s", url, compress)
         
         if not url:
             logger.warning("Invalid request: URL is empty")
@@ -47,6 +48,7 @@ def download():
         
         logger.info("Creating comic service instance")
         comic_service = ComicService()
+        comic_service.compress_images = compress
         pdf_name = comic_service.process_comic(url)
         logger.info("Successfully generated PDF: %s", pdf_name)
         

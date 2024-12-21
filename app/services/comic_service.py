@@ -20,6 +20,8 @@ class ImageInfo:
 class ComicService:
     def __init__(self):
         self.selector = "body > center:nth-child(5) > center > div:nth-child(2)"
+        self.compress_images = True  # Valor padrão, será sobrescrito pela escolha do usuário
+        self.target_width = 1920  # Full HD width
         logger.info("ComicService initialized with selector: %s", self.selector)
     
     def process_comic(self, url: str) -> str:
@@ -149,6 +151,10 @@ class ComicService:
             for chunk in response.iter_content(1024):
                 f.write(chunk)
         
+        # Comprime a imagem após o download se habilitado
+        if self.compress_images:
+            self._compress_image(str(img_path))
+        
         logger.debug("Successfully saved image %d to %s", idx + 1, img_path)
         return str(img_path), idx
     
@@ -194,3 +200,45 @@ class ComicService:
         pdf.save(output_path)
         pdf.close()
         logger.info("Successfully created and saved PDF to: %s", output_path) 
+
+    def _compress_image(self, image_path: str) -> None:
+        """
+        Comprime a imagem para reduzir o tamanho do arquivo final
+        """
+        if not self.compress_images:
+            return
+
+        try:
+            with Image.open(image_path) as img:
+                # Converte para RGB se necessário (remove canal alpha)
+                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                    img = img.convert('RGB')
+                
+                # Calcula as dimensões mantendo proporção
+                if img.width > self.target_width:
+                    ratio = self.target_width / img.width
+                    new_size = (self.target_width, int(img.height * ratio))
+                    logger.debug("Resizing image %s from %dx%d to %dx%d", 
+                               image_path, img.width, img.height, 
+                               new_size[0], new_size[1])
+                    img = img.resize(new_size, Image.Resampling.LANCZOS)
+                
+                # Reduz a quantidade de cores
+                img = img.quantize(colors=256, method=2).convert('RGB')
+                
+                # Comprime a imagem com configurações otimizadas
+                logger.debug("Compressing image %s", image_path)
+                img.save(
+                    image_path,
+                    'JPEG',
+                    quality=40,  # Qualidade JPEG reduzida ainda mais
+                    optimize=True,  # Otimização adicional
+                    progressive=True,  # JPEG progressivo
+                    subsampling='4:2:0',  # Subamostragem de crominância mais agressiva
+                )
+                
+                logger.info("Successfully compressed image: %s", image_path)
+                
+        except Exception as e:
+            logger.error("Error compressing image %s: %s", image_path, str(e))
+            raise

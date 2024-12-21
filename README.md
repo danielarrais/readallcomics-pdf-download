@@ -1,11 +1,11 @@
 # Comic PDF Downloader
 
-A web application to download comics from ReadAllComics and convert them to PDF format, preserving the original image quality and dimensions.
+A web application to download comics from ReadAllComics and convert them to PDF format, with optional image compression for smaller file sizes.
 
 ## Features
 
 - Web interface for easy comic downloading
-- Maintains original image quality and dimensions
+- Optional image compression for smaller PDF files
 - Parallel image downloading for better performance
 - Automatic cleanup of temporary files and PDFs after download
 - Docker containerized for easy deployment
@@ -35,6 +35,37 @@ docker-compose up --build
    - Click "Download PDF"
    - The PDF will be automatically downloaded and removed from the server
 
+## Configuration
+
+The application can be configured using environment variables in the `docker-compose.yml` file:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| COMPRESS_IMAGES | Enable/disable image compression | true |
+| MAX_WORKERS | Number of parallel downloads | 5 |
+
+Example of disabling image compression:
+```bash
+COMPRESS_IMAGES=false docker-compose up --build
+```
+
+## Image Compression
+
+When enabled (default), the application will:
+- Reduce image resolution if larger than 1920px width
+- Maintain original aspect ratio
+- Convert images to optimized JPEG format
+- Reduce color palette to 256 colors
+- Apply aggressive compression settings:
+  - Quality level: 40%
+  - Progressive JPEG encoding
+  - Chroma subsampling (4:2:0)
+  - Color quantization
+  - Additional optimization passes
+- Remove alpha channels (convert to RGB)
+
+This results in very small PDF files while maintaining readable image quality for comics. The compression is optimized for manga and comic content, where high color fidelity is less critical than readability.
+
 ## Project Structure
 
 ```
@@ -63,10 +94,11 @@ docker-compose up --build
 2. **Image Download**:
    - Downloads images in parallel for better performance
    - Uses streaming to optimize memory usage
+   - Optionally compresses images to Full HD
    - Automatically cleans up images after PDF creation
 
 3. **PDF Generation**:
-   - Creates PDF with original image dimensions
+   - Creates PDF with compressed or original image dimensions
    - Optimizes memory usage during creation
    - Automatically deletes the PDF after download
 
@@ -81,6 +113,7 @@ docker-compose up --build
 - All files (images and PDFs) are automatically cleaned up
 - The application runs on port 5000 by default
 - For production deployment, consider adding proper security measures
+- Image compression can significantly reduce PDF file size
 
 ## Troubleshooting
 
@@ -98,6 +131,7 @@ docker-compose up --build
    - Check your internet connection
    - The site might be rate-limiting requests
    - Try reducing the number of parallel downloads in config.py
+   - Consider enabling image compression to reduce memory usage
 
 ## Logging
 
@@ -106,3 +140,4 @@ The application provides detailed logging:
 - Detailed logs in `comic_downloader.log`
 - Download progress and error information
 - File cleanup confirmations
+- Image compression statistics and results
