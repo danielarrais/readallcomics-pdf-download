@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE
+.idea/
+.vscode/
+
+# Logs
+*.log
+comic_downloader.log
+
+# Project specific
+pdfs/*
+images/*
+!pdfs/.gitkeep
+!images/.gitkeep
+
+# System
+.DS_Store

@@ -1,0 +1,6 @@
+requests
+beautifulsoup4
+Pillow
+PyMuPDF
+Flask
+urllib3

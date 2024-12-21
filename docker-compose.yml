@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./pdfs:/app/pdfs
+      - ./images:/app/images
+      - ./app/templates:/app/app/templates
+      - ./app/static:/app/app/static
+    environment:
+      - FLASK_ENV=production
+      - PYTHONPATH=/app
