@@ -9,7 +9,7 @@ class Config:
     # Application configs
     UPLOAD_FOLDER = '/app/pdfs'
     IMAGES_FOLDER = '/app/images'
-    MAX_WORKERS = 5
+    MAX_WORKERS = int(os.environ.get('MAX_WORKERS', '5'))
     
     # Ensure directories exist
     Path(UPLOAD_FOLDER).mkdir(exist_ok=True)
